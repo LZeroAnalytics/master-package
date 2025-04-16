@@ -1,19 +1,26 @@
-ethereum = import_module("github.com/LZeroAnalytics/ethereum-package/main.star")
-chainlink = import_module("github.com/LZeroAnalytics/chainlink-package/main.star")
-uniswap = import_module("github.com/LZeroAnalytics/uniswap-package/main.star")
-
-
 def run(plan, args):
+
+    env = args["env"]
+    # Conditional imports
+    ethereum = import_module("github.com/LZeroAnalytics/ethereum-package@{}/main.star".format(env))
+    chainlink = import_module("github.com/LZeroAnalytics/chainlink-package@{}/main.star".format(env))
+    uniswap = import_module("github.com/LZeroAnalytics/uniswap-package@{}/main.star".format(env))
+
+    clean_args = {}
+    for key in args:
+        if key != "env":
+            clean_args[key] = args[key]
+
     output = struct()
-    if "plugins" not in args:
-        output = ethereum.run(plan, args)
+    if "plugins" not in clean_args:
+        output = ethereum.run(plan, clean_args)
         return output
 
     # Remove plugins key
     ethereum_args = {}
-    for key in args:
+    for key in clean_args:
         if key != "plugins":
-            ethereum_args[key] = args[key]
+            ethereum_args[key] = clean_args[key]
 
     if "chainlink" in args["plugins"]:
         output = chainlink.run(plan, ethereum_args)
