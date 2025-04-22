@@ -28,7 +28,6 @@ def run(plan, args):
         output = chainlink.run(plan, ethereum_args)
     elif "uniswap" in plugins:
         backend_url = plugins["uniswap"]["backend_url"]
-        rpc_url = plugins["uniswap"]["rpc_url"]
-        output = uniswap.run(plan, ethereum_args, rpc_url, backend_url)
+        output = uniswap.run(plan, ethereum_args, backend_url)
 
     return output
