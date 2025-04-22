@@ -29,5 +29,7 @@ def run(plan, args):
     elif "uniswap" in plugins:
         backend_url = plugins["uniswap"]["backend_url"]
         output = uniswap.run(plan, ethereum_args, backend_url)
+    else:
+        output = ethereum.run(plan, ethereum_args)
 
     return output
