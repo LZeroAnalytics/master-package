@@ -26,10 +26,7 @@ def run(plan, args):
 
     if "chainlink" in plugins:
         output = chainlink.run(plan, ethereum_args)
-    else:
-        output = ethereum.run(plan, ethereum_args)
-
-    if "uniswap" in plugins:
+    elif "uniswap" in plugins:
         backend_url = plugins["uniswap"]["backend_url"]
         output = uniswap.run(plan, ethereum_args, backend_url)
 
