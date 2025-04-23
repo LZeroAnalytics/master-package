@@ -12,9 +12,6 @@ def run(plan, args):
             clean_args[key] = args[key]
 
     output = struct()
-    if "plugins" not in clean_args:
-        output = ethereum.run(plan, clean_args)
-        return output
 
     # Remove plugins key
     ethereum_args = {}
@@ -24,11 +21,16 @@ def run(plan, args):
 
     plugins = args.get("plugins", {})
 
-    if "chainlink" in plugins:
-        output = chainlink.run(plan, ethereum_args)
-    elif "uniswap" in plugins:
-        backend_url = plugins["uniswap"]["backend_url"]
-        rpc_url = plugins["uniswap"]["rpc_url"]
-        output = uniswap.run(plan, ethereum_args, rpc_url, backend_url)
+    if plugins != None:
+        if "chainlink" in plugins:
+            output = chainlink.run(plan, ethereum_args)
+        if "uniswap" in plugins:
+            uniswap_config = plugins["uniswap"] 
+            backend_url = uniswap_config.get("backend_url")
+            rpc_url = uniswap_config.get("rpc_url")
+            output = uniswap.run(plan, ethereum_args, rpc_url, backend_url)
+            
+    if not "plugins" in args or not args["plugins"]:
+        output = ethereum.run(plan, ethereum_args)
 
     return output
