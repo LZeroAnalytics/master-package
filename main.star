@@ -22,12 +22,20 @@ def run(plan, args):
     plugins = args.get("plugins", {})
 
     if plugins != None:
+        rpc_url = None
         if "chainlink" in plugins:
             output = chainlink.run(plan, ethereum_args)
+
+            # Use the RPC in subsequent plugins
+            first_participant = output.all_participants[0]
+            rpc_url = "http://{}:{}".format(
+                first_participant.el_context.ip_addr,
+                first_participant.el_context.rpc_port_num
+            )
+
         if "uniswap" in plugins:
             uniswap_config = plugins["uniswap"] 
             backend_url = uniswap_config.get("backend_url")
-            rpc_url = uniswap_config.get("rpc_url")
             output = uniswap.run(plan, ethereum_args, rpc_url, backend_url)
             
     if not "plugins" in args or not args["plugins"]:
