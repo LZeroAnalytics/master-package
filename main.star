@@ -1,13 +1,12 @@
 def run(plan, args):
     env = args["env"]
-    network_type = args["network_type"]
 
     ethereum = import_module("github.com/LZeroAnalytics/ethereum-package@{}/main.star".format(env))
     chainlink = import_module("github.com/LZeroAnalytics/chainlink-package@{}/main.star".format(env))
     uniswap = import_module("github.com/LZeroAnalytics/uniswap-package@{}/main.star".format(env))
     optimism = import_module("github.com/LZeroAnalytics/optimism-package@{}/main.star".format(env))
     
-    clean_args = {key: val for key, val in args.items() if key not in ("env", "network_type", "optimism_params")}
+    clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
 
     output = struct()
@@ -17,6 +16,7 @@ def run(plan, args):
         if plugins:
             rpc_url = None
             if "chainlink" in plugins:
+                network_type = plugins["chainlink"].get("network_type")
                 ethereum_args["network_type"] = network_type
                 result = chainlink.run(plan, ethereum_args)
                 first = result.all_participants[0]
@@ -26,10 +26,10 @@ def run(plan, args):
                 return uniswap.run(plan, ethereum_args, rpc_url, backend_url)
         return ethereum.run(plan, ethereum_args)
 
-    if network_type == "ethereum":
+    if "optimism_params" not in args:
         run_ethereum()
 
-    elif network_type == "optimism":
+    else:
         # Run Ethereum (L1)
         l1_output = run_ethereum()
 
@@ -48,8 +48,5 @@ def run(plan, args):
             "optimism_package": args.get("optimism_params", {})
         }
         output = optimism.run(plan, optimism_args)
-
-    else:
-        fail("Unsupported network_type: {}".format(network_type))
 
     return output

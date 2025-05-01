@@ -5,12 +5,12 @@ participants:
       FORKING_RPC_URL: <FORKING_RPC_URL>
       FORKING_BLOCK_HEIGHT: "latest"
     cl_type: lighthouse
-network_type: "ethereum"
 network_params:
   additional_preloaded_contracts: {}
-plugins: 
+plugins:
   uniswap: {}
-  chainlink: {}
+  chainlink:
+    network_type: "ethereum"
 env: dev
 
 optimism_params:
