@@ -12,9 +12,6 @@ def run(plan, args):
             clean_args[key] = args[key]
 
     output = struct()
-    if "plugins" not in clean_args:
-        output = ethereum.run(plan, clean_args)
-        return output
 
     # Remove plugins key
     ethereum_args = {}
@@ -22,19 +19,26 @@ def run(plan, args):
         if key != "plugins":
             ethereum_args[key] = clean_args[key]
 
-    if "chainlink" in args["plugins"]:
-        output = chainlink.run(plan, ethereum_args)
-    else:
-        output = ethereum.run(plan, ethereum_args)
+    plugins = args.get("plugins", {})
 
-    plan.print(output)
-    if "uniswap" in args["plugins"]:
-        rpc_url = "http://{}:{}".format(output.all_participants[0].el_context.ip_addr, output.all_participants[0].el_context.rpc_port_num)
-        backend_url = args["uniswap_params"]["backend_url"]
-        uniswap.run(
-            plan,
-            rpc_url=rpc_url,
-            backend_url=backend_url
-        )
+    if plugins != None:
+        rpc_url = None
+        if "chainlink" in plugins:
+            output = chainlink.run(plan, ethereum_args)
+
+            # Use the RPC in subsequent plugins
+            first_participant = output.all_participants[0]
+            rpc_url = "http://{}:{}".format(
+                first_participant.el_context.ip_addr,
+                first_participant.el_context.rpc_port_num
+            )
+
+        if "uniswap" in plugins:
+            uniswap_config = plugins["uniswap"] 
+            backend_url = uniswap_config.get("backend_url")
+            output = uniswap.run(plan, ethereum_args, rpc_url, backend_url)
+            
+    if not "plugins" in args or not args["plugins"]:
+        output = ethereum.run(plan, ethereum_args)
 
     return output
