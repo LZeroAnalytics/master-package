@@ -18,9 +18,13 @@ def run(plan, args):
             return struct(
                 message="Plugin removed"
             )
-        ethereum_output = ethereum.run(plan, ethereum_args)
-        first = ethereum_output.all_participants[0]
-        rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
+        rpc_url = get_existing_rpc(plan)
+        ethereum_output = rpc_url
+        if not rpc_url:
+            ethereum_output = ethereum.run(plan, ethereum_args)
+            first = ethereum_output.all_participants[0]
+            rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
+
         result = struct()
         if plugins:
             if "chainlink" in plugins:
@@ -91,3 +95,13 @@ def is_service_running(plan, service_name):
             is_running = True
 
     return is_running
+
+def get_existing_rpc(plan):
+    services = plan.get_services()
+    rpc_url = None
+    for service in services:
+        if "el-1" in service.name:
+            ports = service.ports
+            rpc_url = "http://{}:{}".format(service.ip_address, ports["rpc"].number)
+            break
+    return rpc_url
