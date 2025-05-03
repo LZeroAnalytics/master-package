@@ -5,6 +5,7 @@ def run(plan, args):
     chainlink = import_module("github.com/LZeroAnalytics/chainlink-package@{}/main.star".format(env))
     uniswap = import_module("github.com/LZeroAnalytics/uniswap-package@{}/main.star".format(env))
     optimism = import_module("github.com/LZeroAnalytics/optimism-package@{}/main.star".format(env))
+    graph = import_module("github.com/LZeroAnalytics/graph-package@{}/main.star".format(env))
     
     clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
@@ -13,21 +14,34 @@ def run(plan, args):
 
     def run_ethereum():
         plugins = args.get("plugins", {})
+        if check_plugin_removal(plan, plugins):
+            return struct(
+                message="Plugin removed"
+            )
+        ethereum_output = ethereum.run(plan, ethereum_args)
+        first = ethereum_output.all_participants[0]
+        rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
+        result = struct()
         if plugins:
-            rpc_url = None
             if "chainlink" in plugins:
                 network_type = plugins["chainlink"].get("network_type")
-                ethereum_args["network_type"] = network_type
-                result = chainlink.run(plan, ethereum_args)
+                chainlink_args = ethereum_args
+                chainlink_args["network_type"] = network_type
+                result = chainlink.run(plan, chainlink_args)
                 first = result.all_participants[0]
                 rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
             if "uniswap" in plugins:
                 backend_url = plugins["uniswap"].get("backend_url")
-                return uniswap.run(plan, ethereum_args, rpc_url, backend_url)
-        return ethereum.run(plan, ethereum_args)
+                result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
+            if "graph" in plugins:
+                result = result + graph.run(plan, ethereum_args, rpc_url=rpc_url, env=env)
+
+            return result
+
+        return ethereum_output
 
     if "optimism_params" not in args:
-        run_ethereum()
+        output = run_ethereum()
 
     else:
         # Run Ethereum (L1)
@@ -50,3 +64,30 @@ def run(plan, args):
         output = optimism.run(plan, optimism_args)
 
     return output
+
+
+def check_plugin_removal(plan, plugins):
+    # Check whether to remove Uniswap
+    is_uniswap_running = is_service_running(plan, "uniswap-backend")
+    if (not plugins and is_uniswap_running) or (plugins and not "uniswap" in plugins and is_uniswap_running):
+        plan.remove_service(name="uniswap-backend")
+        plan.remove_service(name="uniswap-ui")
+        return True
+
+    is_graph_running = is_service_running(plan, "graph-node")
+    if (not plugins and is_graph_running) or (plugins and not "graph" in plugins and is_graph_running):
+        plan.remove_service(name="postgres")
+        plan.remove_service(name="graph-node")
+        plan.remove_service(name="ipfs")
+        return True
+
+    return False
+
+def is_service_running(plan, service_name):
+    services = plan.get_services()
+    is_running = False
+    for service in services:
+        if service.name == service_name:
+            is_running = True
+
+    return is_running
