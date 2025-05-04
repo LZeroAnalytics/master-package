@@ -37,7 +37,7 @@ def run(plan, args):
             if "uniswap" in plugins:
                 if not is_service_running(plan, "uniswap-backend"):
                     backend_url = plugins["uniswap"].get("backend_url")
-                result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
+                    result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
             if "graph" in plugins:
                 if not is_service_running(plan, "graph-node"):
                     result = result + graph.run(plan, ethereum_args, rpc_url=rpc_url, env=env)
