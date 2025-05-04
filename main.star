@@ -35,10 +35,12 @@ def run(plan, args):
                 first = result.all_participants[0]
                 rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
             if "uniswap" in plugins:
-                backend_url = plugins["uniswap"].get("backend_url")
+                if not is_service_running(plan, "uniswap-backend"):
+                    backend_url = plugins["uniswap"].get("backend_url")
                 result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
             if "graph" in plugins:
-                result = result + graph.run(plan, ethereum_args, rpc_url=rpc_url, env=env)
+                if not is_service_running(plan, "graph-node"):
+                    result = result + graph.run(plan, ethereum_args, rpc_url=rpc_url, env=env)
 
             return result
 
