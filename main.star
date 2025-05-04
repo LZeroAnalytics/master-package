@@ -10,11 +10,14 @@ def run(plan, args):
     clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
 
+    # Retrieve running services
+    services = plan.get_services()
+
     output = struct()
 
     def run_ethereum():
         plugins = args.get("plugins", {})
-        if check_plugin_removal(plan, plugins):
+        if check_plugin_removal(plan, plugins, services):
             return struct(
                 message="Plugin removed"
             )
@@ -35,10 +38,10 @@ def run(plan, args):
                 first = result.all_participants[0]
                 rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
             if "graph" in plugins:
-                if not is_service_running(plan, "graph-node"):
+                if not is_service_running("graph-node", services):
                     result = result + graph.run(plan, ethereum_args, rpc_url=rpc_url, env=env)
             if "uniswap" in plugins:
-                if not is_service_running(plan, "uniswap-backend"):
+                if not is_service_running( "uniswap-backend", services):
                     backend_url = plugins["uniswap"].get("backend_url")
                     result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
             return result
@@ -71,15 +74,15 @@ def run(plan, args):
     return output
 
 
-def check_plugin_removal(plan, plugins):
+def check_plugin_removal(plan, plugins, services):
     # Check whether to remove Uniswap
-    is_uniswap_running = is_service_running(plan, "uniswap-backend")
+    is_uniswap_running = is_service_running( "uniswap-backend", services)
     if (not plugins and is_uniswap_running) or (plugins and not "uniswap" in plugins and is_uniswap_running):
         plan.remove_service(name="uniswap-backend")
         plan.remove_service(name="uniswap-ui")
         return True
 
-    is_graph_running = is_service_running(plan, "graph-node")
+    is_graph_running = is_service_running("graph-node", services)
     if (not plugins and is_graph_running) or (plugins and not "graph" in plugins and is_graph_running):
         plan.remove_service(name="postgres")
         plan.remove_service(name="graph-node")
@@ -88,8 +91,7 @@ def check_plugin_removal(plan, plugins):
 
     return False
 
-def is_service_running(plan, service_name):
-    services = plan.get_services()
+def is_service_running(service_name, services):
     is_running = False
     for service in services:
         if service.name == service_name:
