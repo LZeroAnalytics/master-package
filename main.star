@@ -72,26 +72,32 @@ def run(plan, args):
 
     if "optimism_params" not in args:
         output = run_ethereum()
-
     else:
-        # Run Ethereum (L1)
-        l1_output = run_ethereum()
+        if "external_l1_network_params" in args:
+            optimism_args = {
+                "external_l1_network_params": args["external_l1_network_params"],
+                "optimism_package": args.get("optimism_params", {})
+            }
+            output = optimism.run(plan, optimism_args)
+        else:
+            # Run Ethereum (L1)
+            l1_output = run_ethereum()
 
-        # Run Optimism with L1 context
-        external_l1_args = {
-            "rpc_kind": "standard",
-            "el_rpc_url": str(l1_output.all_participants[0].el_context.rpc_http_url),
-            "cl_rpc_url": str(l1_output.all_participants[0].cl_context.beacon_http_url),
-            "el_ws_url": str(l1_output.all_participants[0].el_context.ws_url),
-            "network_id": str(l1_output.network_id),
-            "priv_key": l1_output.pre_funded_accounts[12].private_key,
-        }
+            # Run Optimism with L1 context
+            external_l1_args = {
+                "rpc_kind": "standard",
+                "el_rpc_url": str(l1_output.all_participants[0].el_context.rpc_http_url),
+                "cl_rpc_url": str(l1_output.all_participants[0].cl_context.beacon_http_url),
+                "el_ws_url": str(l1_output.all_participants[0].el_context.ws_url),
+                "network_id": str(l1_output.network_id),
+                "priv_key": l1_output.pre_funded_accounts[12].private_key,
+            }
 
-        optimism_args = {
-            "external_l1_network_params": external_l1_args,
-            "optimism_package": args.get("optimism_params", {})
-        }
-        output = optimism.run(plan, optimism_args)
+            optimism_args = {
+                "external_l1_network_params": external_l1_args,
+                "optimism_package": args.get("optimism_params", {})
+            }
+            output = optimism.run(plan, optimism_args)
 
     return output
 
