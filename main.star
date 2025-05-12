@@ -70,15 +70,41 @@ def run(plan, args):
 
         return ethereum_output
 
+    def wait_for_rpc_availability(plan, l1_config_env_vars):
+        plan.run_sh(
+            name="wait-for-rpc-availability",
+            description="Wait for L1 RPC endpoint to respond with a valid chainId",
+            env_vars=l1_config_env_vars,
+            run='echo "Waiting for L1 RPC to respond..." ; \
+                while true; do sleep 5; \
+                echo "Pinging L1 RPC: $L1_RPC_URL"; \
+                chain_id=$(curl -s -X POST -H "Content-Type: application/json" -d \'{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}\' $L1_RPC_URL | jq -r \'.result\'); \
+                if [ "$chain_id" != "null" ] && [ ! -z "$chain_id" ]; then \
+                echo "SUCCESS: RPC responded. Chain ID: $chain_id"; \
+                break; \
+                fi; \
+                echo "RPC not ready yet, retrying..."; \
+                done',
+            wait="15m",
+        )
+        
     if "optimism_params" not in args:
         output = run_ethereum()
     else:
         if "external_l1_network_params" in args:
+            external_l1_params = args["external_l1_network_params"]
+            l1_config_env_vars = {
+                "L1_RPC_URL": external_l1_params["el_rpc_url"]
+            }
+
+            wait_for_rpc_availability(plan, l1_config_env_vars)
+
             optimism_args = {
-                "external_l1_network_params": args["external_l1_network_params"],
+                "external_l1_network_params": external_l1_params,
                 "optimism_package": args.get("optimism_params", {})
             }
             output = optimism.run(plan, optimism_args)
+
         else:
             # Run Ethereum (L1)
             l1_output = run_ethereum()
