@@ -42,7 +42,7 @@ def run(plan, args):
             return struct(
                 message="Plugin removed"
             )
-        rpc_url = get_existing_rpc(plan)
+        rpc_url = get_existing_rpc(plan,services)
         ethereum_output = rpc_url
         if not rpc_url:
             ethereum_output = ethereum.run(plan, ethereum_args)
@@ -153,8 +153,7 @@ def is_service_running(service_name, services):
 
     return is_running
 
-def get_existing_rpc(plan):
-    services = plan.get_services()
+def get_existing_rpc(plan, services):
     rpc_url = None
     for service in services:
         if "el-1" in service.name:
