@@ -7,11 +7,32 @@ def run(plan, args):
     optimism = import_module("github.com/LZeroAnalytics/optimism-package@{}/main.star".format(env))
     graph = import_module("github.com/LZeroAnalytics/graph-package@{}/main.star".format(env))
     
-    clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params")}
+    clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params", "reset_state", "update_state")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
 
     # Retrieve running services
     services = plan.get_services()
+
+    # Check whether to re-sync network
+    reset_state = args.get("reset_state", False)
+    if reset_state:
+        for service in services:
+            name = service.name
+            # Remove all nodes
+            if name.startswith("el-") or name.startswith("cl-") or name.startswith("vc-"):
+                plan.remove_service(name=name)
+
+    # Check whether to update block height
+    update_state = args.get("update_state", False)
+    if update_state:
+        # Placeholder until we have get_service_config in Kurtosis
+        forking_rpc_url = ethereum_args["participants"][0]["el_extra_env_vars"]["FORKING_RPC_URL"]
+        block_height = ethereum_args["participants"][0]["el_extra_env_vars"]["FORKING_BLOCK_HEIGHT"]
+        for service in services:
+            if service.name.startswith("el-1"):
+                service_config = ServiceConfig(env_vars={"FORKING_BLOCK_HEIGHT": block_height, "FORKING_RPC_URL": forking_rpc_url}, image="tiljordan/reth-forking:1.0.0", ports={"engine-rpc": PortSpec(number=8551, transport_protocol="TCP", application_protocol=""), "metrics": PortSpec(number=9001, transport_protocol="TCP", application_protocol="http"), "rpc": PortSpec(number=8545, transport_protocol="TCP", application_protocol=""), "tcp-discovery": PortSpec(number=30303, transport_protocol="TCP", application_protocol=""), "udp-discovery": PortSpec(number=30303, transport_protocol="UDP", application_protocol=""), "ws": PortSpec(number=8546, transport_protocol="TCP", application_protocol="")}, public_ports={}, files={"/jwt": "jwt_file", "/network-configs": "el_cl_genesis_data"}, cmd=["node", "-vvv", "--datadir=/data/reth/execution-data", "--chain=/network-configs/genesis.json", "--http", "--http.port=8545", "--http.addr=0.0.0.0", "--http.corsdomain=*", "--http.api=admin,net,eth,web3,debug,txpool,trace", "--rpc.gascap=500000000", "--ws", "--ws.addr=0.0.0.0", "--ws.port=8546", "--ws.api=net,eth", "--ws.origins=*", "--nat=extip:KURTOSIS_IP_ADDR_PLACEHOLDER", "--authrpc.port=8551", "--authrpc.jwtsecret=/jwt/jwtsecret", "--authrpc.addr=0.0.0.0", "--metrics=0.0.0.0:9001", "--discovery.port=30303", "--port=30303"], private_ip_address_placeholder="KURTOSIS_IP_ADDR_PLACEHOLDER", labels={"ethereum-package.client": "reth", "ethereum-package.client-image": "tiljordan-reth-forking_1-0-0", "ethereum-package.client-type": "execution", "ethereum-package.connected-client": "lighthouse", "ethereum-package.sha256": ""}, tolerations=[], node_selectors={})
+                plan.add_service(name=service.name, config=service_config, description="Updating block height")
+        return
 
     output = struct()
 
@@ -21,7 +42,7 @@ def run(plan, args):
             return struct(
                 message="Plugin removed"
             )
-        rpc_url = get_existing_rpc(plan)
+        rpc_url = get_existing_rpc(plan,services)
         ethereum_output = rpc_url
         if not rpc_url:
             ethereum_output = ethereum.run(plan, ethereum_args)
@@ -49,28 +70,60 @@ def run(plan, args):
 
         return ethereum_output
 
+    def wait_for_rpc_availability(plan, l1_config_env_vars):
+        plan.run_sh(
+            name="wait-for-rpc-availability",
+            description="Wait for L1 RPC endpoint to respond with a valid chainId",
+            env_vars=l1_config_env_vars,
+            run='echo "Waiting for L1 RPC to respond..." ; \
+                while true; do sleep 5; \
+                echo "Pinging L1 RPC: $L1_RPC_URL"; \
+                chain_id=$(curl -s -X POST -H "Content-Type: application/json" -d \'{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}\' $L1_RPC_URL | jq -r \'.result\'); \
+                if [ "$chain_id" != "null" ] && [ ! -z "$chain_id" ]; then \
+                echo "SUCCESS: RPC responded. Chain ID: $chain_id"; \
+                break; \
+                fi; \
+                echo "RPC not ready yet, retrying..."; \
+                done',
+            wait="15m",
+        )
+        
     if "optimism_params" not in args:
         output = run_ethereum()
-
     else:
-        # Run Ethereum (L1)
-        l1_output = run_ethereum()
+        if "external_l1_network_params" in args:
+            external_l1_params = args["external_l1_network_params"]
+            l1_config_env_vars = {
+                "L1_RPC_URL": external_l1_params["el_rpc_url"]
+            }
 
-        # Run Optimism with L1 context
-        external_l1_args = {
-            "rpc_kind": "standard",
-            "el_rpc_url": str(l1_output.all_participants[0].el_context.rpc_http_url),
-            "cl_rpc_url": str(l1_output.all_participants[0].cl_context.beacon_http_url),
-            "el_ws_url": str(l1_output.all_participants[0].el_context.ws_url),
-            "network_id": str(l1_output.network_id),
-            "priv_key": l1_output.pre_funded_accounts[12].private_key,
-        }
+            wait_for_rpc_availability(plan, l1_config_env_vars)
 
-        optimism_args = {
-            "external_l1_network_params": external_l1_args,
-            "optimism_package": args.get("optimism_params", {})
-        }
-        output = optimism.run(plan, optimism_args)
+            optimism_args = {
+                "external_l1_network_params": external_l1_params,
+                "optimism_package": args.get("optimism_params", {})
+            }
+            output = optimism.run(plan, optimism_args)
+
+        else:
+            # Run Ethereum (L1)
+            l1_output = run_ethereum()
+
+            # Run Optimism with L1 context
+            external_l1_args = {
+                "rpc_kind": "standard",
+                "el_rpc_url": str(l1_output.all_participants[0].el_context.rpc_http_url),
+                "cl_rpc_url": str(l1_output.all_participants[0].cl_context.beacon_http_url),
+                "el_ws_url": str(l1_output.all_participants[0].el_context.ws_url),
+                "network_id": str(l1_output.network_id),
+                "priv_key": l1_output.pre_funded_accounts[12].private_key,
+            }
+
+            optimism_args = {
+                "external_l1_network_params": external_l1_args,
+                "optimism_package": args.get("optimism_params", {})
+            }
+            output = optimism.run(plan, optimism_args)
 
     return output
 
@@ -100,8 +153,7 @@ def is_service_running(service_name, services):
 
     return is_running
 
-def get_existing_rpc(plan):
-    services = plan.get_services()
+def get_existing_rpc(plan, services):
     rpc_url = None
     for service in services:
         if "el-1" in service.name:
