@@ -70,9 +70,14 @@ def run(plan, args):
                     backend_url = plugins["uniswap"].get("backend_url")
                     result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
             if "vrf" in plugins:
-                if not is_service_running("postgres-chainlink", services):
-                    vrf_args = setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_output)
-                    result = result + vrf.run(plan, vrf_args)
+                if plugins["vrf"].get("vrf_type") == "vrfv2plus"
+                    if not is_service_running("chainlink-node-vrfv2plus-vrf", services):
+                        vrf_args = setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_output)
+                        result = result + vrf.run(plan, vrf_args)
+                if plugins["vrf"].get("vrf_type") == "mpc"
+                    if not is_service_running("chainlink-node-mpc-vrf-0", services):
+                        vrf_args = setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_output)
+                        result = result + vrf.run(plan, vrf_args)
             return result
 
         return ethereum_output
@@ -204,5 +209,4 @@ def setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_out
         "link_token_address": vrf_plugin_args.get("link_address"),
         "link_native_token_feed_address": vrf_plugin_args.get("link_native_token_feed_address")
     }
-    return vrf_args
     return vrf_args
