@@ -6,6 +6,7 @@ def run(plan, args):
     uniswap = import_module("github.com/LZeroAnalytics/uniswap-package@{}/main.star".format(env))
     optimism = import_module("github.com/LZeroAnalytics/optimism-package@{}/main.star".format(env))
     graph = import_module("github.com/LZeroAnalytics/graph-package@{}/main.star".format(env))
+    vrf = import_module("github.com/LZeroAnalytics/chainlink-vrf-package@{}/main.star".format(env))
     
     clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params", "reset_state", "update_state")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
@@ -42,13 +43,15 @@ def run(plan, args):
             return struct(
                 message="Plugin removed"
             )
-        rpc_url = get_existing_rpc(plan,services)
+        node_urls = get_existing_rpc_and_ws_url(plan, services)
+        rpc_url = node_urls.rpc_url
+        ws_url = node_urls.ws_url
         ethereum_output = rpc_url
         if not rpc_url:
             ethereum_output = ethereum.run(plan, ethereum_args)
             first = ethereum_output.all_participants[0]
             rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
-
+            ws_url = "ws://{}:{}".format(first.el_context.ip_addr, first.el_context.ws_port_num)
         result = struct()
         if plugins:
             if "chainlink" in plugins:
@@ -66,6 +69,15 @@ def run(plan, args):
                 if not is_service_running( "uniswap-backend", services):
                     backend_url = plugins["uniswap"].get("backend_url")
                     result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
+            if "vrf" in plugins:
+                if plugins["vrf"].get("vrf_type") == "vrfv2plus":
+                    if not is_service_running("chainlink-node-vrfv2plus-vrf", services):
+                        vrf_args = setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_output)
+                        result = result + vrf.run(plan, vrf_args)
+                if plugins["vrf"].get("vrf_type") == "mpc":
+                    if not is_service_running("chainlink-node-mpc-vrf-0", services):
+                        vrf_args = setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_output)
+                        result = result + vrf.run(plan, vrf_args)
             return result
 
         return ethereum_output
@@ -142,6 +154,19 @@ def check_plugin_removal(plan, plugins, services):
         plan.remove_service(name="graph-node")
         plan.remove_service(name="ipfs")
         return True
+    
+    is_vrf_running = is_service_running("chainlink-node-", services)
+    if (not plugins and is_vrf_running) or (plugins and not "vrf" in plugins and is_vrf_running):
+        #TODO - n of nodes might change dep on configs (either run discovery by name start or store config file on 1st node)
+        if is_service_running("chainlink-node-mpc-vrf-0", services):
+            for service in services:
+                if service.name.startswith("chainlink-node-mpc-vrf-"):
+                    plan.remove_service(name=service.name)
+        if is_service_running("chainlink-node-vrfv2plus-vrf", services):
+            plan.remove_service(name="chainlink-node-vrfv2plus-vrf")
+            plan.remove_service(name="chainlink-node-vrfv2plus-bhs")
+            plan.remove_service(name="chainlink-node-vrfv2plus-bhf")
+        return True
 
     return False
 
@@ -153,11 +178,35 @@ def is_service_running(service_name, services):
 
     return is_running
 
-def get_existing_rpc(plan, services):
+def get_existing_rpc_and_ws_url(plan, services):
     rpc_url = None
+    ws_url = None
     for service in services:
         if "el-1" in service.name:
             ports = service.ports
             rpc_url = "http://{}:{}".format(service.ip_address, ports["rpc"].number)
+            ws_url = "ws://{}:{}".format(service.ip_address, ports["ws"].number)
             break
-    return rpc_url
+    return struct(rpc_url=rpc_url, ws_url=ws_url)
+
+def setup_vrf_plugin_args(plan, plugins, services, rpc_url, ws_url, ethereum_output):
+    vrf_plugin_args = plugins["vrf"]
+    if not is_service_running("faucet", services):
+        fail("Faucet is not running, needed to spin up VRF")
+    faucet = plan.get_service(name="faucet")
+    vrf_args = {}
+    
+    vrf_args["network"] = {
+        "type": vrf_plugin_args["network_type"],
+        "rpc": rpc_url,
+        "ws": ws_url,
+        "chain_id": vrf_plugin_args.get("chain_id"),
+        "private_key": vrf_plugin_args.get("private_key"),
+        "faucet": "http://{}:{}".format(faucet.ip_address, faucet.ports["api"].number)
+    }
+    vrf_args["vrf"] = {
+        "vrf_type": vrf_plugin_args.get("vrf_type"),
+        "link_token_address": vrf_plugin_args.get("link_address"),
+        "link_native_token_feed_address": vrf_plugin_args.get("link_native_token_feed_address")
+    }
+    return vrf_args

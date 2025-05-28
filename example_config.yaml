@@ -7,10 +7,19 @@ participants:
     cl_type: lighthouse
 network_params:
   additional_preloaded_contracts: {}
+additional_services:
+  - faucet
 plugins:
   uniswap: {}
   chainlink:
     network_type: "ethereum"
+  vrf:
+    network_type: "ethereum"
+    vrf_type: "vrfv2plus"
+    private_key: "0x0000000000000000000000000000000000000000000000000000000000000000"
+    chain_id: "1"
+    link_address: "0x0000000000000000000000000000000000000000"
+    link_native_token_feed_address: "0x0000000000000000000000000000000000000000"
 env: dev
 
 optimism_params:
