@@ -8,7 +8,7 @@ def run(plan, args):
     graph = import_module("github.com/LZeroAnalytics/graph-package@{}/main.star".format(env))
     vrf = import_module("github.com/LZeroAnalytics/chainlink-vrf-package@{}/main.star".format(env))
     
-    clean_args = {key: val for key, val in args.items() if key not in ("env", "optimism_params", "reset_state", "update_state")}
+    clean_args = {key: val for key, val in args.items() if key not in ("optimism_params", "reset_state", "update_state")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
 
     # Retrieve running services
