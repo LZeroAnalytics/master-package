@@ -90,7 +90,7 @@ def run(plan, args):
             if "graph" in plugins and not "graph-node" in running_services:
                 network_type = plugins["graph"].get("network_type")
                 result = result + graph.run(plan, ethereum_args, network_type=network_type, rpc_url=rpc_url, env=env)
-            if "uniswap" in plugins and not"uniswap-backend" in running_services:
+            if "uniswap" in plugins and not "uniswap-backend" in running_services:
                 backend_url = plugins["uniswap"].get("backend_url")
                 result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
             if "vrf" in plugins and not"chainlink-node-vrfv2plus-vrf" in running_services:
