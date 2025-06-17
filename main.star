@@ -11,6 +11,20 @@ def run(plan, args):
     clean_args = {key: val for key, val in args.items() if key not in ("optimism_params", "reset_state", "update_state", "update")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
 
+    if "optimism_params" in args and "external_l1_network_params" in args:
+        external_l1_params = args["external_l1_network_params"]
+        l1_config_env_vars = {
+            "L1_RPC_URL": external_l1_params["el_rpc_url"]
+        }
+
+        wait_for_rpc_availability(plan, l1_config_env_vars)
+
+        optimism_args = {
+            "external_l1_network_params": external_l1_params,
+            "optimism_package": args.get("optimism_params", {})
+        }
+        return optimism.run(plan, optimism_args)
+
     participants = ethereum_args["participants"]
     node_services = []
     counter = 1
@@ -85,60 +99,7 @@ def run(plan, args):
 
         return ethereum_output
 
-    def wait_for_rpc_availability(plan, l1_config_env_vars):
-        plan.run_sh(
-            name="wait-for-rpc-availability",
-            description="Wait for L1 RPC endpoint to respond with a valid chainId",
-            env_vars=l1_config_env_vars,
-            run='echo "Waiting for L1 RPC to respond..." ; \
-                while true; do sleep 5; \
-                echo "Pinging L1 RPC: $L1_RPC_URL"; \
-                chain_id=$(curl -s -X POST -H "Content-Type: application/json" -d \'{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}\' $L1_RPC_URL | jq -r \'.result\'); \
-                if [ "$chain_id" != "null" ] && [ ! -z "$chain_id" ]; then \
-                echo "SUCCESS: RPC responded. Chain ID: $chain_id"; \
-                break; \
-                fi; \
-                echo "RPC not ready yet, retrying..."; \
-                done',
-            wait="15m",
-        )
-        
-    if "optimism_params" not in args:
-        output = run_ethereum()
-    else:
-        if "external_l1_network_params" in args:
-            external_l1_params = args["external_l1_network_params"]
-            l1_config_env_vars = {
-                "L1_RPC_URL": external_l1_params["el_rpc_url"]
-            }
-
-            wait_for_rpc_availability(plan, l1_config_env_vars)
-
-            optimism_args = {
-                "external_l1_network_params": external_l1_params,
-                "optimism_package": args.get("optimism_params", {})
-            }
-            output = optimism.run(plan, optimism_args)
-
-        else:
-            # Run Ethereum (L1)
-            l1_output = run_ethereum()
-
-            # Run Optimism with L1 context
-            external_l1_args = {
-                "rpc_kind": "standard",
-                "el_rpc_url": str(l1_output.all_participants[0].el_context.rpc_http_url),
-                "cl_rpc_url": str(l1_output.all_participants[0].cl_context.beacon_http_url),
-                "el_ws_url": str(l1_output.all_participants[0].el_context.ws_url),
-                "network_id": str(l1_output.network_id),
-                "priv_key": l1_output.pre_funded_accounts[12].private_key,
-            }
-
-            optimism_args = {
-                "external_l1_network_params": external_l1_args,
-                "optimism_package": args.get("optimism_params", {})
-            }
-            output = optimism.run(plan, optimism_args)
+    run_ethereum()
 
     return output
 
@@ -198,3 +159,21 @@ def setup_vrf_plugin_args(plan, plugins, rpc_url, ws_url):
         "link_native_token_feed_address": vrf_plugin_args.get("link_native_token_feed_address")
     }
     return vrf_args
+
+def wait_for_rpc_availability(plan, l1_config_env_vars):
+    plan.run_sh(
+        name="wait-for-rpc-availability",
+        description="Wait for L1 RPC endpoint to respond with a valid chainId",
+        env_vars=l1_config_env_vars,
+        run='echo "Waiting for L1 RPC to respond..." ; \
+                while true; do sleep 5; \
+                echo "Pinging L1 RPC: $L1_RPC_URL"; \
+                chain_id=$(curl -s -X POST -H "Content-Type: application/json" -d \'{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}\' $L1_RPC_URL | jq -r \'.result\'); \
+                if [ "$chain_id" != "null" ] && [ ! -z "$chain_id" ]; then \
+                echo "SUCCESS: RPC responded. Chain ID: $chain_id"; \
+                break; \
+                fi; \
+                echo "RPC not ready yet, retrying..."; \
+                done',
+        wait="15m",
+    )
