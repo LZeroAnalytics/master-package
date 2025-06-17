@@ -87,13 +87,13 @@ def run(plan, args):
                 result = chainlink.run(plan, chainlink_args)
                 first = result.all_participants[0]
                 rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
-            if "graph" in plugins and not is_service_running("graph-node", running_services):
+            if "graph" in plugins and not "graph-node" in running_services:
                 network_type = plugins["graph"].get("network_type")
                 result = result + graph.run(plan, ethereum_args, network_type=network_type, rpc_url=rpc_url, env=env)
-            if "uniswap" in plugins and not is_service_running("uniswap-backend", running_services):
+            if "uniswap" in plugins and not"uniswap-backend" in running_services:
                 backend_url = plugins["uniswap"].get("backend_url")
                 result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
-            if "vrf" in plugins and not is_service_running("chainlink-node-vrfv2plus-vrf", running_services):
+            if "vrf" in plugins and not"chainlink-node-vrfv2plus-vrf" in running_services:
                 vrf_args = setup_vrf_plugin_args(plan, plugins, rpc_url, ws_url)
                 result = result + vrf.run(plan, vrf_args)
             return result
@@ -120,14 +120,6 @@ def check_plugin_removal(plan, plugins):
         plan.remove_service(name="chainlink-node-vrfv2plus-bhs")
         plan.remove_service(name="chainlink-node-vrfv2plus-bhf")
         plan.remove_service(name="chainlink-node-mpc-vrf-0")
-
-def is_service_running(service_name, services):
-    is_running = False
-    for service in services:
-        if service.name == service_name:
-            is_running = True
-
-    return is_running
 
 def get_existing_rpc_and_ws_url(plan, services):
     rpc_url = None
