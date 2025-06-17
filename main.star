@@ -25,6 +25,7 @@ def run(plan, args):
         }
         return optimism.run(plan, optimism_args)
 
+    running_services = plan.get_running_services()
     participants = ethereum_args["participants"]
     node_services = []
     counter = 1
@@ -86,13 +87,13 @@ def run(plan, args):
                 result = chainlink.run(plan, chainlink_args)
                 first = result.all_participants[0]
                 rpc_url = "http://{}:{}".format(first.el_context.ip_addr, first.el_context.rpc_port_num)
-            if "graph" in plugins:
+            if "graph" in plugins and not is_service_running("graph-node", running_services):
                 network_type = plugins["graph"].get("network_type")
                 result = result + graph.run(plan, ethereum_args, network_type=network_type, rpc_url=rpc_url, env=env)
-            if "uniswap" in plugins:
+            if "uniswap" in plugins and not is_service_running("uniswap-backend", running_services):
                 backend_url = plugins["uniswap"].get("backend_url")
                 result = result + uniswap.run(plan, ethereum_args, rpc_url=rpc_url, backend_url=backend_url)
-            if "vrf" in plugins:
+            if "vrf" in plugins and not is_service_running("chainlink-node-vrfv2plus-vrf", running_services):
                 vrf_args = setup_vrf_plugin_args(plan, plugins, rpc_url, ws_url)
                 result = result + vrf.run(plan, vrf_args)
             return result
