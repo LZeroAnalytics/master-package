@@ -7,7 +7,8 @@ def run(plan, args):
     optimism = import_module("github.com/LZeroAnalytics/optimism-package@{}/main.star".format(env))
     graph = import_module("github.com/LZeroAnalytics/graph-package@{}/main.star".format(env))
     vrf = import_module("github.com/LZeroAnalytics/chainlink-vrf-package@{}/main.star".format(env))
-    
+    dfns = import_module("github.com/LZeroAnalytics/dfns-package@{}/main.star".format(env))
+
     clean_args = {key: val for key, val in args.items() if key not in ("optimism_params", "reset_state", "update_state", "update")}
     ethereum_args = {key: val for key, val in clean_args.items() if key != "plugins"}
 
@@ -96,6 +97,9 @@ def run(plan, args):
             if "vrf" in plugins and not"chainlink-node-vrfv2plus-vrf" in running_services:
                 vrf_args = setup_vrf_plugin_args(plan, plugins, rpc_url, ws_url)
                 result = result + vrf.run(plan, vrf_args)
+            if "dfns" in plugins and not "dfns-api" in running_services:
+                dfns_plugin_args = plugins["dfns"]
+                result = dfns.run(plan, rpc_url, dfns_plugin_args["chain_id"], dfns_plugin_args["network_type"], dfns_plugin_args["coingecko_api"], env)
             return result
 
         return ethereum_output
@@ -120,6 +124,13 @@ def check_plugin_removal(plan, plugins):
         plan.remove_service(name="chainlink-node-vrfv2plus-bhs")
         plan.remove_service(name="chainlink-node-vrfv2plus-bhf")
         plan.remove_service(name="chainlink-node-mpc-vrf-0")
+
+    if "dfns" not in plugins:
+        plan.remove_service(name="dfns-api")
+        plan.remove_service(name="dfns-postgres")
+        plan.remove_service(name="dfns-package-postgres")
+        plan.remove_service(name="dfns-package-graph-node")
+        plan.remove_service(name="dfns-package-ipfs")
 
 def get_existing_rpc_and_ws_url(plan, services):
     rpc_url = None
