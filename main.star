@@ -128,9 +128,9 @@ def check_plugin_removal(plan, plugins):
     if "dfns" not in plugins:
         plan.remove_service(name="dfns-api")
         plan.remove_service(name="dfns-postgres")
-        plan.remove_service(name="postgres")
-        plan.remove_service(name="graph-node")
-        plan.remove_service(name="ipfs")
+        plan.remove_service(name="dfns-package-postgres")
+        plan.remove_service(name="dfns-package-graph-node")
+        plan.remove_service(name="dfns-package-ipfs")
 
 def get_existing_rpc_and_ws_url(plan, services):
     rpc_url = None
