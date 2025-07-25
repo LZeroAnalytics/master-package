@@ -104,7 +104,7 @@ def run(plan, args):
 
         return ethereum_output
 
-    run_ethereum()
+    output = run_ethereum()
 
     return output
 
